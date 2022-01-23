@@ -1,0 +1,27 @@
+#!/bin/bash
+#SBATCH --wait-all-nodes=1         # wait for all nodes
+#SBATCH -N 8                       # number of nodes
+#SBATCH -t 4:00:00                 # wall time
+#SBATCH -J "pt_nccl_resnet"        # job name
+#SBATCH --gres=gpu:8               # num gpus per node
+#SBATCH --ntasks-per-node=1        # tasks per node
+#SBATCH --exclusive                # exclusive node access
+#SBATCH --mem=0                    # all mem avail
+#SBATCH --overcommit               # Needed for pytorch
+
+# Configure the multinode script
+SCRIPT="/fsx/yolov5_ptddp/launch.sh"
+
+# Configure workspace in the file system
+WORK_DIR="/fsx/yolov5_ptddp"
+CONT_WORK_DIR="/fsx/yolov5_ptddp"
+
+# Configure container and mounting paths
+CONT="dlc-pt191-yolov5-ptddp"
+MOUNTS="${WORK_DIR}:${CONT_WORK_DIR},/scratch:/scratch"
+
+srun nvidia-modprobe -u -c=0
+srun --mpi=none \
+      --container-name="${CONT}" \
+      --container-mounts="${MOUNTS}" \
+      bash "${SCRIPT}"
