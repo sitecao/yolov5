@@ -24,11 +24,13 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.distributed as dist
+#import torch.distributed as dist
+import smdistributed.dataparallel.torch.distributed as dist
 import torch.nn as nn
 import yaml
 from torch.cuda import amp
-from torch.nn.parallel import DistributedDataParallel as DDP
+#from torch.nn.parallel import DistributedDataParallel as DDP
+from smdistributed.dataparallel.torch.parallel.distributed import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, AdamW, lr_scheduler
 from tqdm import tqdm
 
@@ -57,10 +59,15 @@ from utils.metrics import fitness
 from utils.plots import plot_evolve, plot_labels
 from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_device, torch_distributed_zero_first
 
-LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
-RANK = int(os.getenv('RANK', -1))
-WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
+#LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
+#RANK = int(os.getenv('RANK', -1))
+#WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
+dist.init_process_group()
+
+LOCAL_RANK = dist.get_local_rank()
+RANK = dist.get_rank()
+WORLD_SIZE = dist.get_world_size()
 
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
           opt,
@@ -252,7 +259,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
     # DDP mode
     if cuda and RANK != -1:
-        model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
+        #model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
+        model = DDP(model, device_ids=[dist.get_local_rank()], broadcast_buffers=False)
 
     # Model attributes
     nl = de_parallel(model).model[-1].nl  # number of detection layers (to scale hyps)
@@ -528,7 +536,7 @@ def main(opt, callbacks=Callbacks()):
         assert not opt.evolve, '--evolve argument is not compatible with DDP training'
         torch.cuda.set_device(LOCAL_RANK)
         device = torch.device('cuda', LOCAL_RANK)
-        dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")
+        #dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")
 
     # Train
     if not opt.evolve:
